@@ -1,3 +1,5 @@
+# 文件名: api_server.py (已添加 CORS 修复)
+
 import os
 import pika
 import json
@@ -8,23 +10,39 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# --- 1. 配置日志记录 ---
-# 配置日志格式，包括时间、日志级别和消息内容
+# --- 1. 新增：从 fastapi 导入 CORSMiddleware ---
+from fastapi.middleware.cors import CORSMiddleware
+
+# --- 配置日志记录 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- 2. 初始化请求限制器 ---
-# 根据请求的来源IP进行限制
+# --- 初始化请求限制器 ---
 limiter = Limiter(key_func=get_remote_address)
 
-# --- 3. 创建 FastAPI 应用实例 ---
+# --- 创建 FastAPI 应用实例 ---
 app = FastAPI()
 
-# --- 4. 将限制器应用到 app ---
+# --- 将限制器应用到 app ---
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# --- 2. 新增：在这里添加 CORS 中间件 ---
+# !! 确保这个网址是您网页版的真实网址 !!
+origins = [
+    "https://kerrey-web-client.vercel.app"
+]
 
-# --- 5. 定义经过严格验证的数据模型 ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,       # 允许来自您网页版的请求
+    allow_credentials=True,    # 允许 cookies (如果未来需要)
+    allow_methods=["GET", "POST", "OPTIONS"], # 允许的方法
+    allow_headers=["*"],         # 允许所有请求头
+)
+# --- CORS 配置结束 ---
+
+
+# --- 定义经过严格验证的数据模型 ---
 class Task(BaseModel):
     """定义传入任务的数据结构和验证规则"""
     keyword: str = Field(
@@ -34,7 +52,7 @@ class Task(BaseModel):
     )
     email: EmailStr  # 自动验证必须是合法的邮箱格式
 
-# --- 6. 定义API接口 ---
+# --- 定义API接口 ---
 @app.get("/")
 def read_root():
     """根路径，用于简单的服务健康检查"""
